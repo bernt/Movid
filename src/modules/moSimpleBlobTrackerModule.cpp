@@ -80,95 +80,105 @@ void moSimpleBlobTrackerModule::applyFilter() {
 
         int minsize = this->property("min_size").asDouble();
         int maxsize = this->property("max_size").asDouble();
-        
-        cvSet(this->output_buffer, CV_RGB(0,0,0));
-
+        int delta = sqrt(2) * minsize;
         uchar *data = (uchar *)src->imageData;
-        int i, j, col, row, w, h, col0, row_n, col_n, row0, col1, w1, x, y, nr;
-        int bFound = 0;
+        bool found;
+        int maxcol, mincol, maxrow, minrow, blobwidth, blobheight, blobx, bloby;
         int height = src->height - 1;
         int width = src->width - 1;
         int step = src->widthStep;
-        this->old_blobs->Clear();
-        for(i=0; i < this->new_blobs->GetBlobNum(); i ++)
-        {
-                CvBlob* pBN = this->new_blobs->GetBlob(i);
-                this->old_blobs->AddBlob(pBN);
-        }
-        this->new_blobs->Clear();
         
-        for (i = minsize; i < height; i += minsize) {
-                for (j = minsize; j < width; j +=minsize ) {
-                        if (data[i * step + j] == 255) {
-                                bFound = 1;
-                                for (col = j + 1; col < width; col ++) {
-                                        if (data[i * step + col] < 255) {
+        cvSet(this->output_buffer, CV_RGB(0,0,0));
+        
+        // save blobs
+        this->old_blobs->Clear();
+        delete this->old_blobs;
+        this->old_blobs = this->new_blobs;
+        this->new_blobs = new CvBlobSeq();
+        
+        for (int row = minsize; row < height; row += delta) {
+                for (int col = minsize; col < width; col +=delta ) {
+                        if (data[row * step + col] == 255) {
+                                maxcol = col;
+                                for (int x = col + 1; x < width; x ++) {
+                                        if (data[row * step + x] < 255) {
+                                                maxcol = x;
                                                 break;
                                         }
                                 }
-                                w = col - j;
-                                col0 = j + w/2;
-                                for (row = i  - 1; row > 0; row --) {
-                                        if (data[row * step + col0] < 255) {
+                                blobwidth = maxcol - col;
+                                blobx = col + blobwidth / 2;
+                                minrow = row;
+                                for (int y = row - 1; y > 0; y --) {
+                                        if (data[y * step + blobx] < 255) {
+                                                minrow = y;
                                                 break;
                                         }
                                 }
-                                row_n = row + 1;
-                                for (row = i + 1; row < height; row ++) {
-                                        if (data[row * step + col0] < 255) {
+                                maxrow = row;
+                                for (int y = row + 1; y < height; y ++) {
+                                        if (data[y * step + blobx] < 255) {
+                                                maxrow = y;
                                                 break;
                                         }
                                 }
-                                h = row - row_n;
-                                row0 = row_n + h/2;
-                                for (col1 = j - 1; col1 > 0; col1 --) {
-                                        if (data[row0 * step + col1] < 255) {
+                                blobheight = maxrow - minrow;
+                                bloby = minrow + blobheight / 2;
+                                mincol = col;
+                                for (int x = col - 1; x > 0; x --) {
+                                        if (data[bloby * step + x] < 255) {
+                                                mincol = x;
                                                 break;
                                         }
                                 }
-                                col_n = col1 + 1;
-                                for (col1 = j + 1; col1 < width; col1 ++) {
-                                        if (data[row0 * step + col1] < 255) {
+                                found = false;
+                                for (int x = maxcol + 1; x < width; x ++) {
+                                        if (data[bloby * step + x] < 255) {
+                                                if (found) {
+                                                        maxcol = x;
+                                                }
                                                 break;
                                         }
+                                        found = true;
                                 }
-                                w1 = col1 - col_n;
+                                if (maxcol - mincol > blobwidth) {
+                                        blobwidth = maxcol - mincol;
+                                }
                                 
-                                int row_min = row_n - minsize;
+                                int row_min = minrow - minsize;
                                 if (row_min < 0) {
                                         row_min = 0;
                                 }
-                                int row_max = row_n + h + minsize;
+                                int row_max = maxrow + minsize;
                                 if (row_max >= height) {
                                         row_max = height - 1;
                                 }
                                 
-                                int col_min = col_n - minsize;
+                                int col_min = mincol - minsize;
                                 if (col_min < 0) {
                                         col_min = 0;
                                 }
-                                int col_max = col_n + w1 + minsize;
+                                int col_max = maxcol + minsize;
                                 if (col_max >= width) {
                                         col_max = width - 1;
                                 }
                                 
                                 // erase the area of the image containing this blob
-                                for (y = row_min; y <= row_max; y ++) {
-                                        for (x = col_min; x <= col_max; x ++) {
+                                for (int y = row_min; y <= row_max; y ++) {
+                                        for (int x = col_min; x <= col_max; x ++) {
                                                 data[y * step + x] = 0;
                                         }
                                 }
-                                col0 = col_n + w1/2;
-                                if ((minsize <= w1) && (minsize <= h))
+                                if ((minsize <= blobwidth) && (minsize <= blobheight))
                                 {
                                         // look wether we know the id of this blob
-                                        LOGM(MO_TRACE) << "Testing x=" << col0 << " y=" << row0;
+                                        LOGM(MO_TRACE) << "Testing x=" << blobx << " y=" << bloby;
                                         CvBlob *pB = new CvBlob;
                                         pB->ID = 0;
-                                        for (nr = this->old_blobs->GetBlobNum(); nr > 0; nr --)
+                                        for (int nr = this->old_blobs->GetBlobNum(); nr > 0; nr --)
                                         {
                                                 CvBlob* pO = this->old_blobs->GetBlob(nr);
-                                                if ((pO->x - pO->w / 2 <= col0)  && (col0 <= pO->x + pO->w / 2) && (pO->y - pO->h / 2 <= row0) && (row0 <= pO->y + pO->h / 2))
+                                                if ((pO->x - pO->w / 2 <= blobx)  && (blobx <= pO->x + pO->w / 2) && (pO->y - pO->h / 2 <= bloby) && (bloby <= pO->y + pO->h / 2))
                                                 {
                                                         LOGM(MO_TRACE) << "Found ID:" << pO->ID << " x=" << pO->x - pO->w / 2 << "--" << pO->x + pO->w / 2 << " y=" << pO->y - pO->h / 2 << "--" << pO->y + pO->h / 2;
                                                         if (pB->ID == 0) {
@@ -178,12 +188,12 @@ void moSimpleBlobTrackerModule::applyFilter() {
                                                 }
                                         }
                                         // look from the other point of view
-                                        for (nr = this->old_blobs->GetBlobNum(); nr > 0; nr --)
+                                        for (int nr = this->old_blobs->GetBlobNum(); nr > 0; nr --)
                                         {
                                                 CvBlob *pO = this->old_blobs->GetBlob(nr);
-                                                if ((pO->x - w1 / 2 <= col0)  && (col0 <= pO->x + w1 / 2) && (pO->y - h / 2 <= row0) && (row0 <= pO->y + h / 2))
+                                                if ((pO->x - blobwidth / 2 <= blobx)  && (blobx <= pO->x + blobwidth / 2) && (pO->y -  blobheight / 2 <= bloby) && (bloby <= pO->y + blobheight / 2))
                                                 {
-                                                        LOGM(MO_TRACE) << "2. Try found ID:" << pO->ID << " x=" << pO->x - w1 / 2 << "--" << pO->x + w1 / 2 << " y=" << pO->y - h / 2 << "--" << pO->y + h / 2;
+                                                        LOGM(MO_TRACE) << "2. Try found ID:" << pO->ID << " x=" << pO->x - blobwidth / 2 << "--" << pO->x + blobwidth / 2 << " y=" << pO->y - blobheight / 2 << "--" << pO->y + blobheight / 2;
                                                         if (pB->ID == 0) {
                                                                 pB->ID = pO->ID;
                                                         }
@@ -191,38 +201,38 @@ void moSimpleBlobTrackerModule::applyFilter() {
                                                 }
                                         }
                                         // check if this blob has a collision with a blob already detected
-                                        int bCollision = 0;
-                                        for (nr = this->new_blobs->GetBlobNum(); nr > 0; nr --)
+                                        found = false;
+                                        for (int nr = this->new_blobs->GetBlobNum(); nr > 0; nr --)
                                         {
                                                 CvBlob *pX = this->new_blobs->GetBlob(nr);
-                                                if ((pX->x - pX->w / 2 <= col0)  && (col0 <= pX->x + pX->w / 2) && (pX->y - pX->h / 2 <= row0) && (row0 <= pX->y + pX->h / 2))
+                                                if ((pX->x - pX->w / 2 <= blobx)  && (blobx <= pX->x + pX->w / 2) && (pX->y - pX->h / 2 <= bloby) && (bloby <= pX->y + pX->h / 2))
                                                 {
                                                         LOGM(MO_TRACE) << "Collision ID:" << pX->ID << " x=" << pX->x - pX->w / 2 << "--" << pX->x + pX->w / 2 << " y=" << pX->y - pX->h / 2 << "--" << pX->y + pX->h / 2;
-                                                        bCollision = 1;
+                                                        found = true;
                                                         break;
                                                 }
                                         }
-                                        if (bCollision == 0)
+                                        if (~found)
                                         {
                                                 if (pB->ID == 0)
                                                 {
                                                         pB->ID = this->next_id;
                                                         this->next_id ++;
                                                 }
-                                                pB->x = col0;
-                                                pB->y = row0;
-                                                pB->w = w1;
-                                                pB->h = h;
+                                                pB->x = blobx;
+                                                pB->y = bloby;
+                                                pB->w =blobwidth ;
+                                                pB->h = blobheight;
                                                 this->new_blobs->AddBlob(pB);
                                         }
                                 }
-                                j = col;
+                                col = maxcol;
                         }
                 }
         }
 
         // decrease width and high of each undetected old blob
-        for (nr = old_blobs->GetBlobNum(); nr > 0; nr --)
+        for (int nr = old_blobs->GetBlobNum(); nr > 0; nr --)
         {
                 CvBlob *pO = this->old_blobs->GetBlob(nr);
                 pO->h --;
@@ -233,13 +243,13 @@ void moSimpleBlobTrackerModule::applyFilter() {
                 }
         }
         // add the rest
-        for (nr = this->old_blobs->GetBlobNum(); nr > 0; nr --)
+        for (int nr = this->old_blobs->GetBlobNum(); nr > 0; nr --)
         {
                 this->new_blobs->AddBlob(this->old_blobs->GetBlob(nr));
         }
 
         this->clearBlobs();
-        for (i = this->new_blobs->GetBlobNum() ; i > 0; i --) {
+        for (int i = this->new_blobs->GetBlobNum() ; i > 0; i --) {
                 CvBlob* pB = this->new_blobs->GetBlob(i);
                 LOGM(MO_TRACE) << i << ": ID=" << pB->ID << " x=" << pB->x << " y=" << pB->y;
                 // Assume circular blobs
