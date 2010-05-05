@@ -97,8 +97,8 @@ void moSimpleBlobTrackerModule::applyFilter() {
         }
         this->new_blobs->Clear();
         
-        for (i = minsize; i < height; i += 2) {
-                for (j = minsize; j < width; j += 2) {
+        for (i = minsize; i < height; i += minsize) {
+                for (j = minsize; j < width; j +=minsize ) {
                         if (data[i * step + j] == 255) {
                                 bFound = 1;
                                 for (col = j + 1; col < width; col ++) {
