@@ -66,8 +66,7 @@ void moSimpleBlobTrackerModule::allocateBuffers() {
     LOGM(MO_TRACE) << "allocated output buffer for BlobTracker module.";
 }
 
-void moSimpleBlobTrackerModule::applyFilter() {
-        IplImage* src = static_cast<IplImage*>(this->input->getData());
+void moSimpleBlobTrackerModule::applyFilter(IplImage *src) {
         assert(src != NULL);
         CvSize size = cvGetSize(src);
         

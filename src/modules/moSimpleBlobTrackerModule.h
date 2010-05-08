@@ -36,7 +36,7 @@ protected:
         moDataGenericList blobs;
         moDataStream *output_data;
 
-        void applyFilter();
+        void applyFilter(IplImage *);
         void allocateBuffers();
         void clearBlobs();
 
