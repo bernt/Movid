@@ -28,7 +28,10 @@ public:
 	
 protected:
 	void applyFilter(IplImage *);
-	double threshold;
+	void stop();
+	int getCvType(const std::string &filter);
+	int getCvAdaptativeType(const std::string &filter);
+	int getCvMode(const std::string &filter);
 	
 	MODULE_INTERNALS();
 };
