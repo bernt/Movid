@@ -24,77 +24,148 @@
 
 MODULE_DECLARE(SimpleBlobTracker, "native", "Tracks Blobs in a simple way");
 
+moBlob::moBlob()
+{
+        id = 0;
+        row = 0;
+        col = 0;
+        width = 0;
+        height = 0;
+        age = 0;
+        found = false;
+}
+
+moBlob::moBlob(const moBlob &copyin) // Copy constructor to handle pass by value.
+{
+        id = copyin.id;
+        row = copyin.row;
+        col = copyin.col;
+        width = copyin.width;
+        height = copyin.height;
+        age = copyin.age;
+        found = copyin.found;
+}
+
+std::ostream &operator<<(std::ostream &output, const moBlob &blob)
+{
+        output << blob.id << ' ' << blob.row << ' ' << blob.col << ' ' << blob.width << ' ' << blob.height << ' ' << blob.age << std::endl;
+        return output;
+}
+
+moBlob& moBlob::operator=(const moBlob &rhs)
+{
+        this->id = rhs.id;
+        this->row = rhs.row;
+        this->col = rhs.col;
+        this->width = rhs.width;
+        this->height = rhs.height;
+        this->age = rhs.age;
+        this->found = rhs.found;
+        return *this;
+}
+
+int moBlob::operator==(const moBlob &rhs) const
+{
+        if( this->row != rhs.row)
+                return 0;
+        if( this->col != rhs.col)
+                return 0;
+        if( this->width != rhs.width)
+                return 0;
+        if( this->height != rhs.height)
+                return 0;
+        if( this->age != rhs.age)
+                return 0;
+        if( this->found != rhs.found)
+                return 0;
+        return 1;
+}
+
+// This function is required for built-in STL list functions like sort
+int moBlob::operator<(const moBlob &rhs) const
+{
+        if( this->row == rhs.row && this->col == rhs.col && this->width == rhs.width && this->height == rhs.height && this->age < rhs.age)
+                return 1;
+        if( this->row == rhs.row && this->col == rhs.col && this->width == rhs.width && this->height < rhs.height)
+                return 1;
+        if( this->row == rhs.row && this->col == rhs.col && this->width < rhs.width)
+                return 1;
+        if( this->row == rhs.row && this->col < rhs.col)
+                return 1;
+        if( this->row < rhs.row)
+                return 1;
+        return 0;
+}
+
+int moBlob::operator>(const moBlob &rhs) const
+{
+        if( this->row == rhs.row && this->col == rhs.col && this->width == rhs.width && this->height == rhs.height && this->age > rhs.age)
+                return 1;
+        if( this->row == rhs.row && this->col == rhs.col && this->width == rhs.width && this->height > rhs.height)
+                return 1;
+        if( this->row == rhs.row && this->col == rhs.col && this->width > rhs.width)
+                return 1;
+        if( this->row == rhs.row && this->col > rhs.col)
+                return 1;
+        if( this->row > rhs.row)
+                return 1;
+        return 0;
+}
+
 moSimpleBlobTrackerModule::moSimpleBlobTrackerModule() : moImageFilterModule(){
 
-	MODULE_INIT();
+        MODULE_INIT();
 
-    // Minimum and maximum sizes for blobs. Blobs smaller or larger
-    // will be discarded.
-    this->properties["min_size"] = new moProperty(8.0);
-    this->properties["max_size"] = new moProperty(25.0);
+        // Minimum and maximum sizes for blobs. Blobs smaller or larger
+        // will be discarded.
+        this->properties["min_size"] = new moProperty(8.0);
+        this->properties["max_size"] = new moProperty(25.0);
 
-    this->output_data = new moDataStream("GenericTouch");
-    this->output_count = 2;
-    this->output_infos[1] = new moDataStreamInfo("data", "GenericTouch", "Data stream with touch info");
+        this->output_data = new moDataStream("GenericTouch");
+        this->output_count = 2;
+        this->output_infos[1] = new moDataStreamInfo("data", "GenericTouch", "Data stream with touch info");
 
-    this->next_id = 1;
-    this->new_blobs = new CvBlobSeq();
-    this->old_blobs = new CvBlobSeq();
+        this->old_blobs = new moBlobList;
+        this->next_id = 1;
 }
 
 moSimpleBlobTrackerModule::~moSimpleBlobTrackerModule() {
-    this->clearBlobs();
-    delete this->output_data;
-    delete this->new_blobs;
-    delete this->old_blobs;
+        this->clearBlobs();
+        delete this->output_data;
+        delete this->old_blobs;
 }
 
 void moSimpleBlobTrackerModule::clearBlobs() {
-    moDataGenericList::iterator it;
-    for (it = this->blobs.begin(); it != this->blobs.end(); it ++) {
-        delete (*it);
-    }
-    this->blobs.clear();
+        moDataGenericList::iterator it;
+        for (it = this->blobs.begin(); it != this->blobs.end(); it ++) {
+                delete (*it);
+        }
+        this->blobs.clear();
 }
 
 void moSimpleBlobTrackerModule::allocateBuffers() {
-    IplImage* src = static_cast<IplImage*>(this->input->getData());
-    if (src == NULL) {
-        return;
-    }
-    this->output_buffer = cvCreateImage(cvGetSize(src), src->depth, 3);
-    LOGM(MO_TRACE) << "allocated output buffer for BlobTracker module.";
-}
-
-void moSimpleBlobTrackerModule::applyFilter(IplImage *src) {
-        assert(src != NULL);
-        CvSize size = cvGetSize(src);
-        
-
-        if (src->nChannels != 1) {
-                this->setError("BlobTracker input image must be a single channel binary image.");
-                this->stop();
+        IplImage* src = static_cast<IplImage*>(this->input->getData());
+        if (src == NULL) {
                 return;
         }
+        this->output_buffer = cvCreateImage(cvGetSize(src), src->depth, 3);
+        LOGM(MO_TRACE, "allocated output buffer for BlobTracker module."); 
+}
 
+moBlobList* moSimpleBlobTrackerModule::findItems(IplImage *src) {
+        // find pixels which could belong to blobs, but dont test every pixels in the image
+        bool found;
+        int maxcol, mincol, maxrow, minrow, blobwidth, blobheight, blobx, bloby;
         int minsize = this->property("min_size").asDouble();
         int maxsize = this->property("max_size").asDouble();
         int delta = sqrt(2) * minsize;
-        uchar *data = (uchar *)src->imageData;
-        bool found;
-        int maxcol, mincol, maxrow, minrow, blobwidth, blobheight, blobx, bloby;
         int height = src->height - 1;
         int width = src->width - 1;
         int step = src->widthStep;
-        
-        cvSet(this->output_buffer, CV_RGB(0,0,0));
-        
-        // save blobs
-        this->old_blobs->Clear();
-        delete this->old_blobs;
-        this->old_blobs = this->new_blobs;
-        this->new_blobs = new CvBlobSeq();
-        
+        uchar *data = (uchar *)src->imageData;
+        moBlobList* bloblist = new moBlobList;
+        moBlob blob;
+
         for (int row = minsize; row < height; row += delta) {
                 for (int col = minsize; col < width; col +=delta ) {
                         if (data[row * step + col] == 255) {
@@ -162,121 +233,122 @@ void moSimpleBlobTrackerModule::applyFilter(IplImage *src) {
                                         col_max = width - 1;
                                 }
                                 
-                                // erase the area of the image containing this blob
+                                // erase the area of the image containing this blob, so we don't detect this blob twice
                                 for (int y = row_min; y <= row_max; y ++) {
                                         for (int x = col_min; x <= col_max; x ++) {
                                                 data[y * step + x] = 0;
                                         }
                                 }
-                                if ((minsize <= blobwidth) && (minsize <= blobheight))
+                                if ((minsize <= blobwidth) && (minsize <= blobheight) && (blobwidth <= maxsize) && (blobheight <= maxsize))
                                 {
-                                        // look wether we know the id of this blob
-                                        LOGM(MO_TRACE) << "Testing x=" << blobx << " y=" << bloby;
-                                        CvBlob *pB = new CvBlob;
-                                        pB->ID = 0;
-                                        for (int nr = this->old_blobs->GetBlobNum(); nr > 0; nr --)
-                                        {
-                                                CvBlob* pO = this->old_blobs->GetBlob(nr);
-                                                if ((pO->x - pO->w / 2 <= blobx)  && (blobx <= pO->x + pO->w / 2) && (pO->y - pO->h / 2 <= bloby) && (bloby <= pO->y + pO->h / 2))
-                                                {
-                                                        LOGM(MO_TRACE) << "Found ID:" << pO->ID << " x=" << pO->x - pO->w / 2 << "--" << pO->x + pO->w / 2 << " y=" << pO->y - pO->h / 2 << "--" << pO->y + pO->h / 2;
-                                                        if (pB->ID == 0) {
-                                                                pB->ID = pO->ID;
-                                                        }
-                                                        this->old_blobs->DelBlob(nr);
+                                        LOGM(MO_TRACE, "Found x=" << blobx << " y=" << bloby);
+                                        blob.row = blobx;
+                                        blob.col = bloby;
+                                        blob.width = blobwidth;
+                                        blob.height = blobheight;
+                                        blob.age = 0;
+                                        blob.found = false;
+                                        // check for duplicates
+                                        for (moBlobList::iterator old = bloblist->begin(); old != bloblist->end(); old ++) {
+                                                if (((old->row - old->height / 2 < blob.row) && (blob.row < old->row + old->height / 2)
+                                                        && (old->col - old->width / 2 < blob.col) && (blob.col < old->col + old->width / 2))
+                                                        || ((blob.row - blob.height / 2 < old->row) && (old->row < blob.row + blob.height / 2)
+                                                        && (blob.col - blob.width / 2 < old->col) && (old->col < blob.col + blob.width / 2))) {
+                                                        blob.found = true;
+                                                        minrow = MIN(old->row - old->height / 2 , blob.row - blob.height / 2);
+                                                        maxrow = MAX(old->row + old->height / 2 , blob.row + blob.height / 2);
+                                                        mincol = MIN(old->col - old->width / 2, blob.col - blob.width / 2);
+                                                        maxcol = MAX(old->col + old->width / 2, blob.col + blob.width / 2);
+                                                        old->row = (minrow + maxrow) / 2;
+                                                        old->col  = (mincol + maxcol) / 2;
+                                                        old->height = maxrow - minrow;
+                                                        old->width = maxcol - mincol;
                                                 }
                                         }
-                                        // look from the other point of view
-                                        for (int nr = this->old_blobs->GetBlobNum(); nr > 0; nr --)
-                                        {
-                                                CvBlob *pO = this->old_blobs->GetBlob(nr);
-                                                if ((pO->x - blobwidth / 2 <= blobx)  && (blobx <= pO->x + blobwidth / 2) && (pO->y -  blobheight / 2 <= bloby) && (bloby <= pO->y + blobheight / 2))
-                                                {
-                                                        LOGM(MO_TRACE) << "2. Try found ID:" << pO->ID << " x=" << pO->x - blobwidth / 2 << "--" << pO->x + blobwidth / 2 << " y=" << pO->y - blobheight / 2 << "--" << pO->y + blobheight / 2;
-                                                        if (pB->ID == 0) {
-                                                                pB->ID = pO->ID;
-                                                        }
-                                                        this->old_blobs->DelBlob(nr);
-                                                }
-                                        }
-                                        // check if this blob has a collision with a blob already detected
-                                        found = false;
-                                        for (int nr = this->new_blobs->GetBlobNum(); nr > 0; nr --)
-                                        {
-                                                CvBlob *pX = this->new_blobs->GetBlob(nr);
-                                                if ((pX->x - pX->w / 2 <= blobx)  && (blobx <= pX->x + pX->w / 2) && (pX->y - pX->h / 2 <= bloby) && (bloby <= pX->y + pX->h / 2))
-                                                {
-                                                        LOGM(MO_TRACE) << "Collision ID:" << pX->ID << " x=" << pX->x - pX->w / 2 << "--" << pX->x + pX->w / 2 << " y=" << pX->y - pX->h / 2 << "--" << pX->y + pX->h / 2;
-                                                        found = true;
-                                                        break;
-                                                }
-                                        }
-                                        if (~found)
-                                        {
-                                                if (pB->ID == 0)
-                                                {
-                                                        pB->ID = this->next_id;
-                                                        this->next_id ++;
-                                                }
-                                                pB->x = blobx;
-                                                pB->y = bloby;
-                                                pB->w =blobwidth ;
-                                                pB->h = blobheight;
-                                                this->new_blobs->AddBlob(pB);
+                                        if (~blob.found) {
+                                                bloblist->push_back(blob);
                                         }
                                 }
                                 col = maxcol;
                         }
                 }
         }
+        return bloblist;
+}
 
-        // decrease width and high of each undetected old blob
-        for (int nr = old_blobs->GetBlobNum(); nr > 0; nr --)
-        {
-                CvBlob *pO = this->old_blobs->GetBlob(nr);
-                pO->h --;
-                pO->w --;
-                if ((pO->h <= 0) || (pO->w <= 0))
-                {
-                        this->old_blobs->DelBlob(nr);
+moBlobList* moSimpleBlobTrackerModule::trackItems(moBlobList *bloblist, moBlobList *oldlist) {
+        moBlobList *newlist = new moBlobList;
+        int min_age = this->property("min_age").asInteger();
+        int max_age = this->property("max_age").asInteger();
+        for (moBlobList::iterator blob = oldlist->begin(); blob != oldlist->end(); blob ++) {
+                blob->found = false;
+        }
+        for (moBlobList::iterator blob = bloblist->begin(); blob != bloblist->end(); blob ++) {
+                blob->found = false;
+                for (moBlobList::iterator old = oldlist->begin(); old != oldlist->end(); old ++) {
+                        if (((old->row - old->height / 2 < blob->row) && (blob->row < old->row + old->height / 2) && (old->col - old->width / 2 < blob->col) && (blob->col < old->col + old->width / 2))
+                                || ((blob->row - blob->height / 2 < old->row) && (old->row < blob->row + blob->height / 2) && (blob->col - blob->width / 2 < old->col) && (old->col < blob->col + blob->width / 2))) {
+                                blob->found = true;
+                                old->found = true;
+                                blob->id = old->id;
+                                if (old->age < min_age) {
+                                        old->age ++;
+                                        if (blob->age < old->age) {
+                                                blob->age = old->age;
+                                        }
+                                }
+                        }
+                }
+                if (!(blob->found)) {
+                        blob->id = this->next_id;
+                        this->next_id ++;
+                        blob->found = true;
+                }
+                newlist->push_back(*blob);
+        }
+        for (moBlobList::iterator old = oldlist->begin(); old != oldlist->end(); old ++) {
+                if (!(old->found)) {
+                        old->age ++;
+                        if (old->age <= max_age) {
+                                old->found = true;
+                                newlist->push_back(*old);
+                        }
                 }
         }
-        // add the rest
-        for (int nr = this->old_blobs->GetBlobNum(); nr > 0; nr --)
-        {
-                this->new_blobs->AddBlob(this->old_blobs->GetBlob(nr));
+        return newlist;
+}
+
+void moSimpleBlobTrackerModule::drawItems(moBlobList *bloblist) {
+        CvFont font;
+        char text[20] = "MMMM";
+        cvInitFont(&font, CV_FONT_HERSHEY_SIMPLEX, 1.0, 1.0, 0, 1, CV_AA);
+        cvSet(this->output_buffer, cvScalar(0, 0, 0));
+        for (moBlobList::iterator blob = bloblist->begin(); blob != bloblist->end(); blob ++) {
+                CvPoint p = cvPoint(cvRound(blob->col*256),cvRound(blob->row*256));
+                CvSize  s = cvSize(MAX(1, cvRound(blob->width * 128)), MAX(1, cvRound(blob->height * 128)));
+                cvEllipse(this->output_buffer, p, s, 0, 0, 360, CV_RGB(0, 255, 0), cvRound(1 + (3 * 0) / 255), CV_AA, 8);
+                sprintf(text, "%i", blob->id);
+                cvPutText(this->output_buffer, text, cvPoint(blob->col, blob->row), &font, cvScalar(255, 255, 255, 0));
         }
+}
 
-        this->clearBlobs();
-        for (int i = this->new_blobs->GetBlobNum() ; i > 0; i --) {
-                CvBlob* pB = this->new_blobs->GetBlob(i);
-                LOGM(MO_TRACE) << i << ": ID=" << pB->ID << " x=" << pB->x << " y=" << pB->y;
-                // Assume circular blobs
-                if (pB->w < minsize || maxsize < pB->w || pB->h < minsize || maxsize < pB->h) {
-                        continue;
-                }
-                // draw the blob on output image
-                if (this->output->getObserverCount() > 0) {
-                        CvPoint p = cvPoint(cvRound(pB->x * 256), cvRound(pB->y * 256));
-                        CvSize  s = cvSize(MAX(1, cvRound(CV_BLOB_RX(pB) * 256)), MAX(1, cvRound(CV_BLOB_RY(pB) * 256)));
-                        int c = 0; //cvRound(255*this->tracker->GetState(CV_BLOB_ID(pB)));
+void moSimpleBlobTrackerModule::applyFilter(IplImage *src) {
+        moBlobList * tracked_blobs;
+        moBlobList * new_blobs;
+        assert(src != NULL);
 
-                        cvEllipse(this->output_buffer, p, s, 0, 0, 360,
-                        CV_RGB(c, 255 - c, 0), cvRound(1 + (3 * 0) / 255), CV_AA, 8);
-                }
-
-                // add the blob in data
-                moDataGenericContainer *touch = new moDataGenericContainer();
-                touch->properties["type"] = new moProperty("touch");
-                touch->properties["id"] = new moProperty(pB->ID);
-                touch->properties["x"] = new moProperty(pB->x / size.width);
-                touch->properties["y"] = new moProperty(pB->y / size.height);
-                touch->properties["w"] = new moProperty(pB->w);
-                touch->properties["h"] = new moProperty(pB->h);
-                this->blobs.push_back(touch);
+        if (src->nChannels != 1) {
+                this->setError("BlobTracker input image must be a single channel binary image.");
+                this->stop();
+                return;
         }
-        this->output_data->push(&this->blobs);
-        LOGM(MO_TRACE) << "#### done ###";
+        
+        new_blobs = findItems(src);
+        tracked_blobs = trackItems(new_blobs, old_blobs);
+        drawItems(tracked_blobs);
+        delete this->old_blobs;
+        delete new_blobs;
+        old_blobs = tracked_blobs;
 }
 
 moDataStream* moSimpleBlobTrackerModule::getOutput(int n) {

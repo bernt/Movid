@@ -22,25 +22,52 @@
 #include "../moDataGenericContainer.h"
 #include "moImageFilterModule.h"
 #include "cvaux.h"
+#include <iostream>
+#include <list>
+
+class moBlob {
+friend std::ostream &operator<<(std::ostream &, const moBlob &);
+
+public:
+        int id;
+        int row;
+        int col;
+        int width;
+        int height;
+        int age;
+        bool found;
+
+        moBlob();
+        moBlob(const moBlob &);
+        ~moBlob(){};
+        moBlob &operator=(const moBlob &rhs);
+        int operator==(const moBlob &rhs) const;
+        int operator<(const moBlob &rhs) const;
+        int operator>(const moBlob &rhs) const;
+};
+
+typedef std::list<moBlob> moBlobList;
 
 class moSimpleBlobTrackerModule : public moImageFilterModule{
 public:
-	moSimpleBlobTrackerModule();
-	virtual ~moSimpleBlobTrackerModule();
-	virtual moDataStream *getOutput(int n=0);
+        moSimpleBlobTrackerModule();
+        virtual ~moSimpleBlobTrackerModule();
+        virtual moDataStream *getOutput(int n=0);
 	
 protected:
         int next_id;
-        CvBlobSeq* new_blobs;
-        CvBlobSeq* old_blobs;
+        moBlobList* old_blobs;
         moDataGenericList blobs;
         moDataStream *output_data;
 
+        moBlobList* findItems(IplImage *);
+        moBlobList* trackItems(moBlobList *, moBlobList *);
+        void drawItems(moBlobList *);
         void applyFilter(IplImage *);
         void allocateBuffers();
         void clearBlobs();
 
-	MODULE_INTERNALS();
+        MODULE_INTERNALS();
 };
 
 #endif
