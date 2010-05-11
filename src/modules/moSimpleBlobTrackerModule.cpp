@@ -332,6 +332,24 @@ void moSimpleBlobTrackerModule::drawItems(moBlobList *bloblist) {
         }
 }
 
+void moSimpleBlobTrackerModule::sendOutput(IplImage *src, moBlobList *bloblist) {
+        CvSize size = cvGetSize(src);
+        this->clearBlobs();
+        for (moBlobList::iterator blob = bloblist->begin(); blob != bloblist->end(); blob ++) {
+                moDataGenericContainer *touch = new moDataGenericContainer();
+                
+                touch->properties["type"] = new moProperty("touch");
+                touch->properties["id"] = new moProperty(blob->id);
+                touch->properties["x"] = new moProperty((float)blob->col / size.width);
+                touch->properties["y"] = new moProperty((float)blob->row / size.height);
+                touch->properties["w"] = new moProperty(blob->width);
+                touch->properties["h"] = new moProperty(blob->height);
+                //std::cout << blob->id << ": x=" << (float)blob->col / size.width << " y=" << (float)blob->row / size.height << std::endl;
+                this->blobs.push_back(touch);
+        }
+        this->output_data->push(&this->blobs);
+}
+
 void moSimpleBlobTrackerModule::applyFilter(IplImage *src) {
         moBlobList * tracked_blobs;
         moBlobList * new_blobs;
@@ -346,6 +364,7 @@ void moSimpleBlobTrackerModule::applyFilter(IplImage *src) {
         new_blobs = findItems(src);
         tracked_blobs = trackItems(new_blobs, old_blobs);
         drawItems(tracked_blobs);
+        sendOutput(src, tracked_blobs);
         delete this->old_blobs;
         delete new_blobs;
         old_blobs = tracked_blobs;

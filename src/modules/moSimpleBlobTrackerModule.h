@@ -62,6 +62,7 @@ protected:
 
         moBlobList* findItems(IplImage *);
         moBlobList* trackItems(moBlobList *, moBlobList *);
+        void sendOutput(IplImage *, moBlobList *);
         void drawItems(moBlobList *);
         void applyFilter(IplImage *);
         void allocateBuffers();
