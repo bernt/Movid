@@ -242,8 +242,8 @@ moBlobList* moSimpleBlobTrackerModule::findItems(IplImage *src) {
                                 if ((minsize <= blobwidth) && (minsize <= blobheight) && (blobwidth <= maxsize) && (blobheight <= maxsize))
                                 {
                                         LOGM(MO_TRACE, "Found x=" << blobx << " y=" << bloby);
-                                        blob.row = blobx;
-                                        blob.col = bloby;
+                                        blob.row = bloby;
+                                        blob.col = blobx;
                                         blob.width = blobwidth;
                                         blob.height = blobheight;
                                         blob.age = 0;
