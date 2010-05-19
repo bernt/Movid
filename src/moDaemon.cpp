@@ -64,6 +64,8 @@ bool moDaemon::detach(std::string pidfilename) {
 	if (pid < 0)
 		LOG(MO_ERROR, "no child process could be created, but this process is still living");
 	return(pid <= 0);
+#else
+	return true;
 #endif
 }
 

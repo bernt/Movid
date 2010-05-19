@@ -88,6 +88,7 @@ void moLog::setLogLevel(int n) {
 	g_loglevel = n;
 }
 
+#ifndef WIN32
 int moLog::getSysLogLevel(int n) {
 	switch (n) {
 		case MO_CRITICAL:	return LOG_CRIT;
@@ -98,6 +99,7 @@ int moLog::getSysLogLevel(int n) {
 		default:		return 0;
 	}
 }
+#endif
 
 std::string moLog::getLogLevelName(int n) {
 	switch (n) {

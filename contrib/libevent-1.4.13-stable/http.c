@@ -99,8 +99,12 @@
 #define NI_MAXSERV 32
 #define NI_MAXHOST 1025
 
+#ifndef NI_NUMERICHOST
 #define NI_NUMERICHOST 1
+#endif
+#ifndef NI_NUMERICSERV
 #define NI_NUMERICSERV 2
+#endif
 
 static int
 fake_getnameinfo(const struct sockaddr *sa, size_t salen, char *host, 
@@ -142,6 +146,7 @@ fake_getnameinfo(const struct sockaddr *sa, size_t salen, char *host,
 #endif
 
 #ifndef HAVE_GETADDRINFO
+#ifndef HAVE_ADDRINFO
 struct addrinfo {
 	int ai_family;
 	int ai_socktype;
@@ -150,6 +155,7 @@ struct addrinfo {
 	struct sockaddr *ai_addr;
 	struct addrinfo *ai_next;
 };
+#endif
 static int
 fake_getaddrinfo(const char *hostname, struct addrinfo *ai)
 {

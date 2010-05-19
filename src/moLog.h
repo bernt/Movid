@@ -76,7 +76,9 @@ public:
 	static void cleanup();
 	static void setLogLevel(int n);
 	static int getLogLevel();
+#ifndef WIN32
 	static int getSysLogLevel(int n);
+#endif
 	static std::string getLogLevelName(int n);
 };
 

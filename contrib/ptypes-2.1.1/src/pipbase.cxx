@@ -212,7 +212,9 @@ const char* ptdecl usockerrmsg(int code)
     case EMSGSIZE:          return "Message too long";
     case ENOPROTOOPT:
     case EPROTONOSUPPORT:
+#ifdef EPFNOSUPPORT
     case EPFNOSUPPORT:
+#endif
     case EAFNOSUPPORT:      return "Protocol or address family not supported";
     case EADDRINUSE:        return "Address already in use";
     case EADDRNOTAVAIL:     return "Address not available";
@@ -221,7 +223,9 @@ const char* ptdecl usockerrmsg(int code)
     case ECONNRESET:        return "Connection reset by peer";
     case ETIMEDOUT:         return "Operation timed out";
     case ECONNREFUSED:      return "Connection refused";
+#ifdef EHOSTDOWN
     case EHOSTDOWN:         return "Host is down";
+#endif
     case EHOSTUNREACH:      return "No route to host";
 
     // we always translate h_errno to ENOENT and simply show "host not found"
