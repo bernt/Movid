@@ -33,6 +33,7 @@ static moFactory *instance = NULL;
 void moFactory::init() {
 	REGISTER_MODULE(Amplify);
 	REGISTER_MODULE(BackgroundSubtract);
+	REGISTER_MODULE(SimpleBlobTracker)
 	REGISTER_MODULE(BlobTracker)
 	REGISTER_MODULE(Camera);
 	REGISTER_MODULE(Combine);

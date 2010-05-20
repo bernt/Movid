@@ -71,6 +71,7 @@ SOURCES = \
 	src/modules/moMirrorImageModule.cpp \
 	src/modules/moPeakFinderModule.cpp \
 	src/modules/moRoiModule.cpp \
+	src/modules/moSimpleBlobTrackerModule.cpp \
 	src/modules/moSmoothModule.cpp \
 	src/modules/moThresholdModule.cpp \
 	src/modules/moTuioModule.cpp \
